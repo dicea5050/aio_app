@@ -79,11 +79,25 @@ export default function AdminDiagnose() {
             clearInterval(progressTimer);
 
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || '分析に失敗しました');
+                let errorMessage = '分析に失敗しました';
+                try {
+                    const data = await response.json();
+                    errorMessage = data.error || errorMessage;
+                } catch (parseError) {
+                    // JSONパースに失敗した場合（HTMLのタイムアウト画面など）
+                    if (response.status === 504 || response.status === 500) {
+                        errorMessage = 'サーバーで処理タイムアウトが発生しました。しばらく待ってから再度お試しください。';
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
-            const result = await response.json();
+            let result;
+            try {
+                result = await response.json();
+            } catch (parseError) {
+                throw new Error('データの読み込みに失敗しました。サーバーでエラーが発生した可能性があります。');
+            }
             setProgress(100);
             setStatusText('完了！結果画面に移動します...');
 

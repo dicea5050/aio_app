@@ -53,24 +53,14 @@ export async function checkAICitation(
     siteDescription: string
 ): Promise<AICheckResult> {
     try {
-        // 業種×地域に関連する質問を生成（Groundingあり）
         const queries = [
             `${region}で${industry}のおすすめの会社を教えてください`,
             `${region}の${industry}について詳しく教えてください`,
             `${industry}を${region}で探しています。どこがいいですか？`,
         ];
 
-        const results: { query: string; response: string; cited: boolean }[] = [];
-        let citedCount = 0;
-
-        for (let i = 0; i < queries.length; i++) {
-            const query = queries[i];
-
-            // レートリミット対策: クエリ間に3秒の遅延
-            if (i > 0) {
-                await delay(3000);
-            }
-
+        // クエリを並列実行
+        const results = await Promise.all(queries.map(async (query) => {
             try {
                 const result = await generateWithRetry(query, true);
                 const response = result.text;
@@ -80,22 +70,22 @@ export async function checkAICitation(
                 const cited: boolean = response.includes(domain) ||
                     (!!siteTitle && siteTitle.length >= 3 && response.includes(siteTitle));
 
-                if (cited) citedCount++;
-
-                results.push({
+                return {
                     query,
                     response: response.substring(0, 500) + (response.length > 500 ? '...' : ''),
                     cited,
-                });
+                };
             } catch (apiError: any) {
                 console.error('Gemini API個別クエリエラー:', apiError?.message || apiError);
-                results.push({
+                return {
                     query,
                     response: `（API応答エラー: ${apiError?.message || '不明なエラー'}）`,
                     cited: false,
-                });
+                };
             }
-        }
+        }));
+
+        const citedCount = results.filter(r => r.cited).length;
 
         // 引用率の評価文
         const citationRate = citedCount / queries.length;
@@ -134,7 +124,6 @@ URL: ${url}
         let improvementSuggestions: string[] = [];
 
         try {
-            await delay(3000);
             const assessResult = await generateWithRetry(assessmentPrompt, false);
             overallAssessment = assessResult.text;
         } catch {
@@ -157,7 +146,6 @@ URL: ${url}
 
 箇条書きのみで回答してください（「・」で始めてください）`;
 
-            await delay(3000);
             const suggestResult = await generateWithRetry(suggestPrompt, false);
             improvementSuggestions = suggestResult.text
                 .split('\n')
