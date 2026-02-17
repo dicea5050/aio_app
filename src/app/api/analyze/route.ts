@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
         // 7. Supabaseに保存（エラーが出ても結果は返す）
         try {
-            await supabaseAdmin.from('diagnoses').insert({
+            const { error: dbError } = await supabaseAdmin.from('diagnoses').insert({
                 id,
                 url,
                 industry,
@@ -128,9 +128,14 @@ export async function POST(request: NextRequest) {
                 ai_check: aiCheck,
                 page_scores: adjustedPageScores,
                 pages_analyzed: pages.length,
+                created_at: result.createdAt, // 明示的に保存日時を指定
             });
+
+            if (dbError) {
+                console.error('DB保存エラー詳細:', dbError);
+            }
         } catch (dbError) {
-            console.error('DB保存エラー:', dbError);
+            console.error('DB保存例外:', dbError);
         }
 
         return NextResponse.json(result);

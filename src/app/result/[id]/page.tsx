@@ -34,9 +34,20 @@ export default function ResultPage() {
             setResult(JSON.parse(stored));
             setLoading(false);
         } else {
-            // セッションストレージにない場合はダッシュボードへ戻す
-            // （本来はDBからIDで引くべきだが、現状の実装に合わせる）
-            router.push('/admin/dashboard');
+            // セッションストレージにない場合はDBから取得
+            try {
+                const res = await fetch(`/api/diagnoses/${id}`);
+                if (!res.ok) {
+                    throw new Error('診断結果が見つかりませんでした');
+                }
+                const data = await res.json();
+                setResult(data);
+            } catch (err) {
+                console.error('診断結果の取得に失敗:', err);
+                router.push('/admin/dashboard');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 

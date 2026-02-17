@@ -108,6 +108,9 @@ export default function AdminDashboard() {
                     <span style={{ fontSize: '20px', fontWeight: 700 }}>🔒 管理画面</span>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
+                    <button className="btn-secondary" onClick={() => router.push('/admin/users')}>
+                        👤 ユーザー管理
+                    </button>
                     <button className="btn-primary" onClick={() => router.push('/admin/diagnose')}>
                         ＋ 新規診断
                     </button>
@@ -186,10 +189,7 @@ export default function AdminDashboard() {
                                 {diagnoses.map(d => (
                                     <tr key={d.id} style={{ cursor: 'pointer' }}
                                         onClick={() => {
-                                            const stored = sessionStorage.getItem(`diagnosis_${d.id}`);
-                                            if (stored) {
-                                                router.push(`/result/${d.id}`);
-                                            }
+                                            router.push(`/result/${d.id}`);
                                         }}
                                     >
                                         <td style={{ whiteSpace: 'nowrap' }}>
