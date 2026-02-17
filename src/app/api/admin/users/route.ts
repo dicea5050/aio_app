@@ -8,13 +8,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export async function GET(req: NextRequest) {
     try {
-        // セッションチェック（本当はミドルウェアや共通関数でやるべきだが、ここでは簡易的に）
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
-        });
-        const { data: { session } } = await supabase.auth.getSession();
+        const authHeader = req.headers.get('Authorization') || '';
+        const token = authHeader.replace('Bearer ', '');
 
-        if (!session) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -31,12 +31,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
-        });
-        const { data: { session } } = await supabase.auth.getSession();
+        const authHeader = req.headers.get('Authorization') || '';
+        const token = authHeader.replace('Bearer ', '');
 
-        if (!session) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

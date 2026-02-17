@@ -5,18 +5,23 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+async function verifyAuth(req: NextRequest) {
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace('Bearer ', '');
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    return { user, error };
+}
+
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
-        });
-        const { data: { session } } = await supabase.auth.getSession();
+        const { user, error: authError } = await verifyAuth(req);
 
-        if (!session) {
+        if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -36,12 +41,9 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
-        });
-        const { data: { session } } = await supabase.auth.getSession();
+        const { user, error: authError } = await verifyAuth(req);
 
-        if (!session) {
+        if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -67,12 +69,9 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
-        });
-        const { data: { session } } = await supabase.auth.getSession();
+        const { user, error: authError } = await verifyAuth(req);
 
-        if (!session) {
+        if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

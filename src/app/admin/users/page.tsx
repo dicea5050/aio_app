@@ -69,7 +69,7 @@ export default function UserManagementPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: session?.access_token || '',
+                    Authorization: `Bearer ${session?.access_token || ''}`,
                 },
                 body: JSON.stringify({ email, password }),
             });
@@ -100,7 +100,7 @@ export default function UserManagementPage() {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: session?.access_token || '',
+                    Authorization: `Bearer ${session?.access_token || ''}`,
                 },
                 body: JSON.stringify({
                     email: editEmail,
