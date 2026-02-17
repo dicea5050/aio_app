@@ -83,7 +83,17 @@ export default function ResultPage() {
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
 
-                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                // アスペクト比を維持して配置 (横幅いっぱいに合わせる)
+                const imgProps = pdf.getImageProperties(imgData);
+                const ratio = imgProps.width / imgProps.height;
+                const imgHeight = pdfWidth / ratio;
+
+                // 万が一高さが超える場合はページ全体に収まるように調整
+                const finalHeight = imgHeight > pdfHeight ? pdfHeight : imgHeight;
+                const finalWidth = imgHeight > pdfHeight ? pdfHeight * ratio : pdfWidth;
+
+                // 中央寄せまたは上寄せで配置（基本は上寄せ）
+                pdf.addImage(imgData, 'PNG', 0, 0, finalWidth, finalHeight);
             }
 
             const safeDomain = result.url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 30);
@@ -138,11 +148,19 @@ export default function ResultPage() {
         return 'var(--accent-red)';
     };
 
-    const ITEMS_PER_PAGE = 15;
-    const pageChunks = [];
+    const scoreItems = Object.entries(result.scoreDetails);
+    const scoreChunks: [string, any][][] = [];
+    for (let i = 0; i < scoreItems.length; i += 2) {
+        scoreChunks.push(scoreItems.slice(i, i + 2) as [string, any][]);
+    }
+
+    const ITEMS_PER_PAGE = 8;
+    const pageChunks: any[][] = [];
     for (let i = 0; i < result.pageScores.length; i += ITEMS_PER_PAGE) {
         pageChunks.push(result.pageScores.slice(i, i + ITEMS_PER_PAGE));
     }
+
+    let currentPNum = 1;
 
     return (
         <div className={styles.sheetWrapper} ref={dashboardRef}>
@@ -174,7 +192,7 @@ export default function ResultPage() {
             </div>
             <div style={{ height: '40px' }}></div>
 
-            <Sheet pageNum={1} result={result}>
+            <Sheet pageNum={currentPNum++} result={result}>
                 <div style={{
                     marginBottom: '40px', padding: '30px',
                     background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px',
@@ -229,22 +247,25 @@ export default function ResultPage() {
                 </div>
             </Sheet>
 
-            <Sheet pageNum={2} result={result}>
-                <div className={styles.sectionTitle}>
-                    <span className={styles.sectionIcon}>📊</span> 詳細スコア分析
-                </div>
-                <div className={styles.scoreGrid} style={{ marginBottom: '50px' }}>
-                    {Object.entries(result.scoreDetails).map(([key, detail]) => (
-                        <ScoreCard key={key} detail={detail as any} icon={scoreIcons[key] || '📋'} />
-                    ))}
-                </div>
-                <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: 'auto', paddingBottom: '20px' }}>
-                    ※ 次ページにAIによる詳細分析結果が続きます
-                </div>
-            </Sheet>
+            {/* 詳細スコア分析 (複数ページに分割) */}
+            {scoreChunks.map((chunk: [string, any][], index: number) => (
+                <Sheet key={`score-${index}`} pageNum={currentPNum++} result={result}>
+                    <div className={styles.sectionTitle}>
+                        <span className={styles.sectionIcon}>📊</span> 詳細スコア分析 ({index + 1}/{scoreChunks.length})
+                    </div>
+                    <div className={styles.scoreGrid} style={{ marginBottom: '50px' }}>
+                        {chunk.map(([key, detail]: [string, any]) => (
+                            <ScoreCard key={key} detail={detail as any} icon={scoreIcons[key] || '📋'} />
+                        ))}
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: 'auto', paddingBottom: '20px' }}>
+                        {index < scoreChunks.length - 1 ? '※ 次ページに詳細分析が続きます' : '※ 次ページにAIによる詳細分析結果が続きます'}
+                    </div>
+                </Sheet>
+            ))}
 
             {result.aiCheck && (
-                <Sheet pageNum={3} result={result}>
+                <Sheet pageNum={currentPNum++} result={result}>
                     <div className={styles.sectionTitle}>
                         <span className={styles.sectionIcon}>🤖</span> AI検索対応分析
                     </div>
@@ -296,27 +317,27 @@ export default function ResultPage() {
                 </Sheet>
             )}
 
-            {pageChunks.map((chunk, index) => (
-                <Sheet key={index} pageNum={index + (result.aiCheck ? 4 : 3)} result={result}>
+            {pageChunks.map((chunk: any[], index: number) => (
+                <Sheet key={index} pageNum={currentPNum++} result={result}>
                     <div className={styles.sectionTitle}>
                         <span className={styles.sectionIcon}>📋</span>
                         ページ別分析 ({index + 1}/{pageChunks.length})
                     </div>
                     <div className={styles.detailCard} style={{ overflow: 'visible' }}>
-                        <table className="data-table" style={{ width: '100%', fontSize: '12px' }}>
+                        <table className="data-table" style={{ width: '100%', fontSize: '12px', tableLayout: 'fixed' }}>
                             <thead>
                                 <tr style={{ background: '#f8f9fa', textAlign: 'left' }}>
-                                    <th style={{ padding: '10px' }}>ページ</th>
+                                    <th style={{ padding: '10px', width: '40%' }}>ページ</th>
                                     <th style={{ padding: '10px', width: '80px' }}>スコア</th>
                                     <th style={{ padding: '10px' }}>検出された問題点</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {chunk.map((page, i) => (
+                                {chunk.map((page: any, i: number) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                                         <td style={{ padding: '10px' }}>
-                                            <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{page.title}</div>
-                                            <div style={{ color: '#999', fontSize: '10px', marginTop: '4px' }}>{page.url}</div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '13px', wordBreak: 'break-all' }}>{page.title}</div>
+                                            <div style={{ color: '#999', fontSize: '10px', marginTop: '4px', wordBreak: 'break-all' }}>{page.url}</div>
                                         </td>
                                         <td style={{ padding: '10px' }}>
                                             <span style={{ fontWeight: 'bold', fontSize: '14px', color: getPageScoreColor(page.score) }}>{page.score}</span>
@@ -324,7 +345,7 @@ export default function ResultPage() {
                                         <td style={{ padding: '10px' }}>
                                             {page.issues.length > 0 ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                    {page.issues.map((issue, j) => (
+                                                    {page.issues.map((issue: string, j: number) => (
                                                         <span key={j} style={{
                                                             background: '#fffbeb', color: '#92400e',
                                                             padding: '4px 8px', borderRadius: '4px', fontSize: '11px',

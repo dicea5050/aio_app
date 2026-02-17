@@ -12,7 +12,7 @@ function delay(ms: number): Promise<void> {
 async function generateWithRetry(
     contents: string,
     useGrounding: boolean = false,
-    maxRetries = 3
+    maxRetries = 5
 ): Promise<{ text: string; groundingMetadata?: any }> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
@@ -21,21 +21,30 @@ async function generateWithRetry(
                 config.tools = [{ googleSearch: {} }];
             }
 
-            const model = (ai as any).getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-            const result = await model.generateContent({
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-lite',
                 contents: [{ role: 'user', parts: [{ text: contents }] }],
-                ...config
+                config
             });
-            const response = await result.response;
 
             return {
-                text: response.text() || '',
-                groundingMetadata: response.candidates?.[0]?.groundingMetadata,
+                text: response.text || '',
+                groundingMetadata: (response as any).groundingMetadata,
             };
         } catch (error: any) {
-            const is429 = error?.message?.includes('429') || error?.message?.includes('quota');
-            if (is429 && attempt < maxRetries - 1) {
-                const waitTime = Math.min(5000 * Math.pow(2, attempt), 30000);
+            const errorMsg = typeof error === 'string' ? error : (error?.message || JSON.stringify(error));
+            console.error('Gemini API Error Detail:', errorMsg);
+
+            const isQuotaExceeded = errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('RESOURCE_EXHAUSTED');
+
+            if (isQuotaExceeded && attempt < maxRetries - 1) {
+                // エラーメッセージから待機推奨時間を抽出（例: "Please retry in 56.162120793s"）
+                let waitTime = Math.min(5000 * Math.pow(2, attempt), 60000);
+                const retryMatch = errorMsg.match(/retry in ([\d\.]+)s/);
+                if (retryMatch && retryMatch[1]) {
+                    waitTime = (Math.ceil(parseFloat(retryMatch[1])) + 1) * 1000;
+                }
+
                 console.log(`Gemini API レートリミット (429) - ${waitTime / 1000}秒後にリトライ (${attempt + 1}/${maxRetries})`);
                 await delay(waitTime);
             } else {
@@ -79,8 +88,8 @@ export async function checkAICitation(
                     isError: false
                 });
 
-                // 次のリクエストまで少し待機（安全策）
-                await delay(1000);
+                // 次のリクエストまで待機（安全策：安定性向上のため2秒に延長）
+                await delay(2000);
             } catch (apiError: any) {
                 console.error('Gemini API個別クエリエラー:', apiError?.message || apiError);
                 results.push({
@@ -117,7 +126,7 @@ export async function checkAICitation(
         const assessmentPrompt = `
 以下のウェブサイトのAI検索最適化（AIO）の状態を厳しく評価してください。
 改善が必要な点を中心に、率直で具体的な指摘をお願いします。
-日本語で200文字以内で回答してください。
+日本語で150文字以内で簡潔に回答してください。
 
 【評価条件】
 - AI検索での引用テスト結果: ${validCount}件の正常なテスト中${citedCount}件でのみ言及あり（${citationLevel}）
@@ -150,14 +159,18 @@ URL: ${url}
             const suggestPrompt = `
 以下のウェブサイトのAI検索最適化（AIO）のために、最も緊急度の高い改善提案を5つ箇条書きで述べてください。
 日本語で回答してください。
-AI検索テストでの引用率: ${queries.length}件中${citedCount}件（${Math.round(citationRate * 100)}%）
-具体的で実行可能な提案を、緊急度の高い順に述べてください。
 
+【制約事項】
+- 各項目は「具体的なアクション」とし、60文字以内に収めてください。
+- キーワードを大量に羅列すること（キーワードスタッフィングのような出力）は厳禁です。
+- 箇条書きのみで回答してください（「・」で始めてください）。
+
+AI検索テストでの引用率: ${queries.length}件中${citedCount}件（${Math.round(citationRate * 100)}%）
 URL: ${url}
 業種: ${industry}
 地域: ${region}
 
-箇条書きのみで回答してください（「・」で始めてください）`;
+具体的で実行可能な提案を、緊急度の高い順に述べてください。`;
 
             const suggestResult = await generateWithRetry(suggestPrompt, false);
             improvementSuggestions = suggestResult.text
