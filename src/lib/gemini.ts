@@ -21,21 +21,22 @@ async function generateWithRetry(
                 config.tools = [{ googleSearch: {} }];
             }
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents,
-                config,
+            const model = (ai as any).getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+            const result = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: contents }] }],
+                ...config
             });
+            const response = await result.response;
 
             return {
-                text: response.text || '',
+                text: response.text() || '',
                 groundingMetadata: response.candidates?.[0]?.groundingMetadata,
             };
         } catch (error: any) {
             const is429 = error?.message?.includes('429') || error?.message?.includes('quota');
             if (is429 && attempt < maxRetries - 1) {
                 const waitTime = Math.min(5000 * Math.pow(2, attempt), 30000);
-                console.log(`Gemini API レートリミット - ${waitTime / 1000}秒後にリトライ (${attempt + 1}/${maxRetries})`);
+                console.log(`Gemini API レートリミット (429) - ${waitTime / 1000}秒後にリトライ (${attempt + 1}/${maxRetries})`);
                 await delay(waitTime);
             } else {
                 throw error;
@@ -59,8 +60,9 @@ export async function checkAICitation(
             `${industry}を${region}で探しています。どこがいいですか？`,
         ];
 
-        // クエリを並列実行
-        const results = await Promise.all(queries.map(async (query) => {
+        // クエリを逐次実行（429エラー対策）
+        const results = [];
+        for (const query of queries) {
             try {
                 const result = await generateWithRetry(query, true);
                 const response = result.text;
@@ -70,28 +72,39 @@ export async function checkAICitation(
                 const cited: boolean = response.includes(domain) ||
                     (!!siteTitle && siteTitle.length >= 3 && response.includes(siteTitle));
 
-                return {
+                results.push({
                     query,
                     response: response.substring(0, 500) + (response.length > 500 ? '...' : ''),
                     cited,
-                };
+                    isError: false
+                });
+
+                // 次のリクエストまで少し待機（安全策）
+                await delay(1000);
             } catch (apiError: any) {
                 console.error('Gemini API個別クエリエラー:', apiError?.message || apiError);
-                return {
+                results.push({
                     query,
                     response: `（API応答エラー: ${apiError?.message || '不明なエラー'}）`,
                     cited: false,
-                };
+                    isError: true
+                });
             }
-        }));
+        }
 
-        const citedCount = results.filter(r => r.cited).length;
+        // 成功したクエリのみで引用率を計算
+        const validResults = results.filter(r => !r.isError);
+        const citedCount = validResults.filter(r => r.cited).length;
+        const validCount = validResults.length;
 
         // 引用率の評価文
-        const citationRate = citedCount / queries.length;
+        const citationRate = validCount > 0 ? citedCount / validCount : 0;
         let citationLevel: string;
-        if (citationRate === 0) {
-            citationLevel = '引用率0%で、AI検索において全く認識されていない深刻な状態です';
+
+        if (validCount === 0) {
+            citationLevel = 'APIエラーによりAI検索テストを完了できませんでした。現在、AI検索エンジンでの認知度を正確に測定できていません。';
+        } else if (citationRate === 0) {
+            citationLevel = `引用率0%（${validCount}件のテスト中）で、AI検索において全く認識されていない深刻な状態です`;
         } else if (citationRate < 0.5) {
             citationLevel = `引用率${Math.round(citationRate * 100)}%で、AI検索での認知度は非常に低い状態です`;
         } else if (citationRate < 1.0) {
@@ -107,7 +120,7 @@ export async function checkAICitation(
 日本語で200文字以内で回答してください。
 
 【評価条件】
-- AI検索での引用テスト結果: ${queries.length}件の質問中${citedCount}件でのみ言及あり（${citationLevel}）
+- AI検索での引用テスト結果: ${validCount}件の正常なテスト中${citedCount}件でのみ言及あり（${citationLevel}）
 - 引用されなかった場合は「このままではAI検索で競合に顧客を奪われるリスクが高い」旨を含めてください
 - 甘い評価は避け、具体的な問題点と危機感を伝えてください
 

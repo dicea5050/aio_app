@@ -46,53 +46,57 @@ export async function POST(request: NextRequest) {
         let adjustedPageScores = [...analysis.pageScores]; // Shallow copy of array is enough as we map new objects
 
         if (aiCheck) {
-            const citedCount = aiCheck.queries.filter(q => q.cited).length;
-            const totalQueries = aiCheck.queries.length || 1;
-            const citationRate = citedCount / totalQueries;
-            let penaltyMultiplier = 1.0;
+            const validResults = aiCheck.queries.filter((q: any) => !q.isError);
+            const totalQueries = validResults.length;
 
-            if (citationRate === 0) {
-                // AI引用率0%: AIOスコアなのにAIに全く認識されていない → 大幅減点
-                // 例: 76点 → 30点(E), 60点 → 24点(E), 90点 → 36点(D)
-                penaltyMultiplier = 0.40;
-            } else if (citationRate < 0.5) {
-                // AI引用率50%未満: かなり厳しい補正
-                // 例: 76点 → 46点(D)
-                penaltyMultiplier = 0.60;
-            } else if (citationRate < 1.0) {
-                // AI引用率50%以上100%未満: 中程度の補正
-                // 例: 76点 → 61点(C)
-                penaltyMultiplier = 0.80;
+            // 全てのAIクエリがエラーだった場合は、不当な減点を避けるため補正を行わない
+            if (totalQueries === 0) {
+                console.warn('AI引用チェックが全てエラーのため、スコア補正をスキップします');
+            } else {
+                const citedCount = validResults.filter((q: any) => q.cited).length;
+                const citationRate = citedCount / totalQueries;
+                let penaltyMultiplier = 1.0;
+
+                if (citationRate === 0) {
+                    // AI引用率0%: AIOスコアなのにAIに全く認識されていない → 大幅減点
+                    penaltyMultiplier = 0.40;
+                } else if (citationRate < 0.5) {
+                    // AI引用率50%未満: かなり厳しい補正
+                    penaltyMultiplier = 0.60;
+                } else if (citationRate < 1.0) {
+                    // AI引用率50%以上100%未満: 中程度の補正
+                    penaltyMultiplier = 0.80;
+                }
+                // AI引用率100%: 減点なし
+
+                // 総合スコアの補正
+                adjustedScore = Math.max(10, Math.round(adjustedScore * penaltyMultiplier));
+
+                // 詳細スコア（5軸）の補正
+                Object.keys(adjustedScores).forEach(key => {
+                    const k = key as keyof typeof adjustedScores;
+                    adjustedScores[k] = Math.max(2, Math.round(adjustedScores[k] * penaltyMultiplier));
+                });
+
+                // 詳細スコア詳細情報の補正
+                Object.keys(adjustedScoreDetails).forEach(key => {
+                    const k = key as keyof typeof adjustedScoreDetails;
+                    adjustedScoreDetails[k].score = Math.max(2, Math.round(adjustedScoreDetails[k].score * penaltyMultiplier));
+                });
+
+                // ページ別スコアの補正
+                adjustedPageScores = adjustedPageScores.map(page => ({
+                    ...page,
+                    score: Math.max(5, Math.round(page.score * penaltyMultiplier))
+                }));
+
+                // 補正後のランク再判定
+                if (adjustedScore >= 90) adjustedRank = 'A';
+                else if (adjustedScore >= 75) adjustedRank = 'B';
+                else if (adjustedScore >= 55) adjustedRank = 'C';
+                else if (adjustedScore >= 35) adjustedRank = 'D';
+                else adjustedRank = 'E';
             }
-            // AI引用率100%: 減点なし
-
-            // 総合スコアの補正
-            adjustedScore = Math.max(10, Math.round(adjustedScore * penaltyMultiplier));
-
-            // 詳細スコア（5軸）の補正
-            Object.keys(adjustedScores).forEach(key => {
-                const k = key as keyof typeof adjustedScores;
-                adjustedScores[k] = Math.max(2, Math.round(adjustedScores[k] * penaltyMultiplier));
-            });
-
-            // 詳細スコア詳細情報の補正
-            Object.keys(adjustedScoreDetails).forEach(key => {
-                const k = key as keyof typeof adjustedScoreDetails;
-                adjustedScoreDetails[k].score = Math.max(2, Math.round(adjustedScoreDetails[k].score * penaltyMultiplier));
-            });
-
-            // ページ別スコアの補正
-            adjustedPageScores = adjustedPageScores.map(page => ({
-                ...page,
-                score: Math.max(5, Math.round(page.score * penaltyMultiplier))
-            }));
-
-            // 補正後のランク再判定
-            if (adjustedScore >= 90) adjustedRank = 'A';
-            else if (adjustedScore >= 75) adjustedRank = 'B';
-            else if (adjustedScore >= 55) adjustedRank = 'C';
-            else if (adjustedScore >= 35) adjustedRank = 'D';
-            else adjustedRank = 'E';
         }
 
         // 5. IDを生成
