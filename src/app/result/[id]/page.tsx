@@ -78,30 +78,10 @@ export default function ResultPage() {
             const safeDomain = result.url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_').substring(0, 30);
             const date = new Date().toISOString().split('T')[0];
             const fileName = `AIO_Report_${safeDomain}_${date}.pdf`;
-            const pdfBase64 = pdf.output('datauristring');
 
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/api/download-pdf';
-            form.target = '_blank';
-            form.style.display = 'none';
+            // Vercelの制限(4.5MB)を避けるため、サーバーを介さずブラウザで直接保存する
+            pdf.save(fileName);
 
-            const dataInput = document.createElement('input');
-            dataInput.type = 'hidden';
-            dataInput.name = 'pdfData';
-            dataInput.value = pdfBase64;
-            form.appendChild(dataInput);
-
-            const filenameInput = document.createElement('input');
-            filenameInput.type = 'hidden';
-            filenameInput.name = 'filename';
-            filenameInput.value = fileName;
-            form.appendChild(filenameInput);
-
-            document.body.appendChild(form);
-            form.submit();
-
-            setTimeout(() => document.body.removeChild(form), 2000);
             window.scrollTo(0, scrollY);
 
         } catch (error) {
