@@ -54,3 +54,40 @@ export async function GET(
         );
     }
 }
+
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'IDは必須です' },
+                { status: 400 }
+            );
+        }
+
+        const { error } = await supabaseAdmin
+            .from('diagnoses')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('DB削除エラー:', error);
+            return NextResponse.json(
+                { error: '削除に失敗しました' },
+                { status: 500 }
+            );
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('削除エラー:', error);
+        return NextResponse.json(
+            { error: '削除中にエラーが発生しました' },
+            { status: 500 }
+        );
+    }
+}

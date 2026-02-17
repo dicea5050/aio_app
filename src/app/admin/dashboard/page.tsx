@@ -88,6 +88,26 @@ export default function AdminDashboard() {
         fetchDiagnoses();
     };
 
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // 行のクリックイベントを防止
+        if (!confirm('この診断履歴を削除してもよろしいですか？')) return;
+
+        try {
+            const res = await fetch(`/api/diagnoses/${id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                fetchDiagnoses();
+                fetchStats();
+            } else {
+                alert('削除に失敗しました');
+            }
+        } catch (e) {
+            console.error('削除エラー:', e);
+            alert('削除中にエラーが発生しました');
+        }
+    };
+
     const getRankBadgeClass = (rank: string) => {
         if (rank === 'A' || rank === 'B') return 'badge badge-success';
         if (rank === 'C') return 'badge badge-info';
@@ -183,6 +203,7 @@ export default function AdminDashboard() {
                                     <th>スコア</th>
                                     <th>ランク</th>
                                     <th>ページ数</th>
+                                    <th style={{ textAlign: 'center' }}>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -203,6 +224,15 @@ export default function AdminDashboard() {
                                             <span className={getRankBadgeClass(d.rank)}>{d.rank}</span>
                                         </td>
                                         <td>{d.pages_analyzed}</td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <button
+                                                className="btn-danger"
+                                                onClick={(e) => handleDelete(d.id, e)}
+                                                style={{ padding: '6px 12px' }}
+                                            >
+                                                削除
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
