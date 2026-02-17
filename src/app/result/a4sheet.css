@@ -1,0 +1,75 @@
+/* A4シートレイアウト */
+.sheetWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f0f2f5;
+    /* 背景グレー */
+    padding: 40px 20px;
+    gap: 40px;
+    /* ページ間の隙間 */
+    min-height: 100vh;
+}
+
+.sheet {
+    /* A4サイズ (210mm x 297mm) */
+    width: 210mm;
+    min-height: 297mm;
+    /* コンテンツが溢れた場合も考慮（基本は固定運用だが） */
+    height: 297mm;
+    /* 固定高さにしてページネーションを厳密にする */
+    background: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    padding: 15mm;
+    /* 印刷余白 */
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    /* はみ出し防止 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* ページ番号 */
+.pageNumber {
+    position: absolute;
+    bottom: 10mm;
+    right: 15mm;
+    font-size: 10px;
+    color: #999;
+}
+
+/* 印刷時の設定 */
+@media print {
+    .sheetWrapper {
+        background: none;
+        padding: 0;
+        gap: 0;
+    }
+
+    .sheet {
+        box-shadow: none;
+        margin: 0;
+        page-break-after: always;
+    }
+}
+
+/* モバイル対応：画面幅がA4より狭い場合は縮小表示 */
+@media screen and (max-width: 850px) {
+
+    /* 210mm approx 794px + margins */
+    .sheet {
+        transform-origin: top center;
+        transform: scale(0.6);
+        /* 適宜調整 */
+        margin-bottom: -100mm;
+        /* scaleによる余白調整 */
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .sheet {
+        transform: scale(0.4);
+        margin-bottom: -160mm;
+    }
+}
